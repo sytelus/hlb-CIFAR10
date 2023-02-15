@@ -7,7 +7,7 @@ from torch import nn
 
 from models.speedyresnet import make_net #speedyresnet, tv_models
 from dataset import get_dataset, get_batches
-from opt_sched_dadapt import OptSched
+from opt_sched_onecycle import OptSched
 from ema import NetworkEMA
 from logging_utils import print_headers, print_training_details, print_device_info
 from evaluation import evaluate
@@ -39,7 +39,7 @@ hyp = {
     'train_epochs': 10,
     'pad_amount': 3,
     'device': 'cuda',
-    'dtype': torch.float32,
+    'dtype': torch.float16,
     'memory_format': torch.channels_last,
     'data_cache_location': 'data_cache.pt',
     'label_smoothing': 0.2,

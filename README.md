@@ -117,3 +117,21 @@ Mean, StdDev, Min, Max Accuracy: (0.9424667358398438, 0.0022479381877928972, 0.9
 Mean, StdDev, Min, Max Train Time: (44.40179443359375, 0.17301391065120697, 44.29471969604492, 44.60139465332031)
 Eval time/epoch mean(s): 0.5512141811370849
 Wall clock(s): 155.6284537
+
+### Findings
+- Manual constant LR isn't able to pull more than 0.89 acc
+- Linear one cycle manual LR can pull upto 0.93 acc
+- DAdaptAdam is able to pull 0.92 but with manual search on weight decay and is not working in FP16
+- DAdaptAdan is only able to match or does worse than DAdaptAdam
+- ResNet18 can't pull more than 0.89 acc and is much slower.
+- Resnet50 is even more slower and perf not better than ResNet18
+- EfficientNet_bo cannot be trained using DAdaptAdam
+- MobileNetV3_small is very slow
+- Using autocast is trmendously slow
+
+### Possible Next Steps
+- Use torch.compile when it starts to work
+- Try caching batches
+- Add weight decay schedule and discovery in DAdaptAdam
+- Make DAdaptAdam work in FP16
+- Use flash convs
