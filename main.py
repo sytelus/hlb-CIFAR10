@@ -118,7 +118,7 @@ def main():
 
 
     # Get network
-    net = make_net(data, hyp['scaling_factor'], hyp['device'], hyp['pad_amount'], model_name='resnet18')
+    net = make_net(data, hyp['scaling_factor'], hyp['device'], hyp['pad_amount'])
     net.to(device=hyp['device'], memory_format=hyp['memory_format'], dtype=hyp['dtype'])
 
     opt_sched = OptSched(batchsize, net, total_train_steps, num_low_lr_steps_for_ema)
