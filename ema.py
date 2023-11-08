@@ -3,7 +3,7 @@ import copy
 import torch
 from torch import nn
 
-hyp = {
+config = {
     'ema': {
         'decay_base': .986
     },
@@ -20,7 +20,7 @@ class NetworkEMA(nn.Module):
         # I believe this wasn't logged, but the EMA update power is adjusted by being raised to the power of the number of "every n" steps
         # to somewhat accomodate for whatever the expected information intake rate is. The tradeoff I believe, though, is that this is to some degree noisier as we
         # are intaking fewer samples of our distribution-over-time, with a higher individual weight each. This can be good or bad depending upon what we want.
-        projected_ema_decay_val = hyp['ema']['decay_base'] ** ema_steps
+        projected_ema_decay_val = config['ema']['decay_base'] ** ema_steps
 
         # you can update/hack this as necessary for update scheduling purposes :3
         self.decay = decay or projected_ema_decay_val

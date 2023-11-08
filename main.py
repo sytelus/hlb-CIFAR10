@@ -11,6 +11,7 @@ from opt_sched_onecycle import OptSched
 from ema import NetworkEMA
 from logging_utils import print_headers, print_training_details, print_device_info
 from evaluation import evaluate
+import utils
 
 # <-- teaching comments
 # <-- functional comments
@@ -32,7 +33,7 @@ from evaluation import evaluate
 
 
 # To replicate the ~95.77% accuracy in 188 seconds runs, simply change the base_depth from 64->128 and the num_epochs from 10->80
-hyp = {
+config = {
     'ema_start_before_epochs': 2,
     'ema_steps': 2,
     'scaling_factor': 1./10,
@@ -41,20 +42,22 @@ hyp = {
     'device': 'cuda',
     'dtype': torch.float16,
     'memory_format': torch.channels_last,
-    'data_cache_location': 'data_cache.pt',
+    'data_download_location': '$DATA_ROOT/datasets/',
+    'data_cache_location': '$DATA_ROOT/datasets/hlb_cifar10/',
     'label_smoothing': 0.2,
     'batchsize': 512,
     'eval_batchsize': 1000, # eval set size should be divisible by this number
 }
 
-batchsize = hyp['batchsize']
+batchsize = config['batchsize']
 
-data = get_dataset(hyp['data_cache_location'], hyp['device'], hyp['dtype'], hyp['pad_amount'])
+data = get_dataset(config['data_download_location'], config['data_cache_location'],
+                   config['device'], config['dtype'], config['pad_amount'])
 
 
 # Hey look, it's the soft-targets/label-smoothed loss! Native to PyTorch. Now, _that_ is pretty cool, and simplifies things a lot, to boot! :D :)
-loss_fn = nn.CrossEntropyLoss(label_smoothing=hyp['label_smoothing'], reduction='none')
-loss_fn.to(hyp['device'])
+loss_fn = nn.CrossEntropyLoss(label_smoothing=config['label_smoothing'], reduction='none')
+loss_fn.to(config['device'])
 
 
 def train_epoch(net, inputs, targets, epoch_step, opt_sched):
@@ -97,6 +100,10 @@ class RollingAverage:
         return self.mean
 
 def main():
+    utils.set_env_vars({'DATA_ROOT':
+                            (None, 'Please set the path to place cifar10 data in $DATA_ROOT environment variable')
+                        }, raise_exec=True)
+
     freeze_support()
 
     # Initializing constants for the whole run.
@@ -108,9 +115,9 @@ def main():
 
     # TODO: Doesn't currently account for partial epochs really (since we're not doing "real" epochs across the whole batchsize)....
     num_steps_per_epoch = len(data['train']['images']) // batchsize
-    total_train_steps = num_steps_per_epoch * hyp['train_epochs']
-    ema_epoch_start = hyp['train_epochs'] - hyp['ema_start_before_epochs']
-    num_low_lr_steps_for_ema = hyp['ema_start_before_epochs'] * num_steps_per_epoch
+    total_train_steps = num_steps_per_epoch * config['train_epochs']
+    ema_epoch_start = config['train_epochs'] - config['ema_start_before_epochs']
+    num_low_lr_steps_for_ema = config['ema_start_before_epochs'] * num_steps_per_epoch
 
     print('train size:', len(data['train']['images']))
     print('eval size:', len(data['eval']['images']))
@@ -118,8 +125,8 @@ def main():
 
 
     # Get network
-    net = make_net(data, hyp['scaling_factor'], hyp['device'], hyp['pad_amount'])
-    net.to(device=hyp['device'], memory_format=hyp['memory_format'], dtype=hyp['dtype'])
+    net = make_net(data, config['scaling_factor'], config['device'], config['pad_amount'])
+    net.to(device=config['device'], memory_format=config['memory_format'], dtype=config['dtype'])
 
     opt_sched = OptSched(batchsize, net, total_train_steps, num_low_lr_steps_for_ema)
 
@@ -134,7 +141,7 @@ def main():
     print_headers()
 
     if True:  # Sometimes we need a conditional/for loop here, this is placed to save the trouble of needing to indent
-        for epoch in range(hyp['train_epochs']):
+        for epoch in range(config['train_epochs']):
             #################
             # Training Mode #
             #################
@@ -150,7 +157,7 @@ def main():
             # train_epoch_compiled = torch.compile(train_epoch)
 
             for epoch_step, (inputs, targets) in enumerate(
-                    get_batches(data, key='train', batchsize=batchsize, device=hyp['device'], memory_format=hyp['memory_format'])):
+                    get_batches(data, key='train', batchsize=batchsize, device=config['device'], memory_format=config['memory_format'])):
                 train_acc_e, train_loss_e = train_epoch(
                     net, inputs, targets, epoch_step, opt_sched)
                 train_acc, train_loss = train_acc_e or train_acc, train_loss_e or train_loss
@@ -161,10 +168,10 @@ def main():
 
                 current_steps += 1
 
-                if epoch >= ema_epoch_start and current_steps % hyp['ema_steps'] == 0:
+                if epoch >= ema_epoch_start and current_steps % config['ema_steps'] == 0:
                     # at each ema steps init or update moving average
                     if net_ema is None:
-                        net_ema = NetworkEMA(net, hyp['ema_steps'])
+                        net_ema = NetworkEMA(net, config['ema_steps'])
                     else:
                         net_ema.update(net)
 
@@ -173,12 +180,12 @@ def main():
             train_time += 1e-3 * starter.elapsed_time(ender)
 
             val_loss, val_acc, ema_val_acc, eval_time_s = \
-                evaluate(net, net_ema, data, hyp['eval_batchsize'],
-                         epoch, loss_fn, ema_epoch_start, device=hyp['device'], memory_format=hyp['memory_format'])
+                evaluate(net, net_ema, data, config['eval_batchsize'],
+                         epoch, loss_fn, ema_epoch_start, device=config['device'], memory_format=config['memory_format'])
             eval_time.add(eval_time_s)
 
             # We also check to see if we're in our final epoch so we can print the 'bottom' of the table for each round.
-            print_training_details(vars=locals(), is_final_entry=(epoch == hyp['train_epochs'] - 1))
+            print_training_details(vars=locals(), is_final_entry=(epoch == config['train_epochs'] - 1))
 
     # Return the final ema accuracy achieved (not using the 'best accuracy' selection strategy, which I think is okay here....)
     return ema_val_acc, train_time, eval_time.mean
@@ -197,7 +204,7 @@ if __name__ == "__main__":
     acc_list = torch.stack(acc_list)
     train_time_list = torch.stack(train_time_list)
 
-    print_device_info(hyp['device'])
+    print_device_info(config['device'])
 
     print("Mean, StdDev, Min, Max Accuracy:", (torch.mean(acc_list).item(),
                                                 torch.std(acc_list).item(),

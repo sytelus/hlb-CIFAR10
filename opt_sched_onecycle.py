@@ -1,14 +1,14 @@
 import torch
 
-hyp = {
+config = {
     # to be filled by init
 }
 
 bias_scaler = 32
 
 def init_split_parameter_dictionaries(network):
-    params_non_bias = {'params': [], 'lr': hyp['opt']['non_bias_lr'], 'momentum': .85, 'nesterov': True, 'weight_decay': hyp['opt']['non_bias_decay']}
-    params_bias     = {'params': [], 'lr': hyp['opt']['bias_lr'],     'momentum': .85, 'nesterov': True, 'weight_decay': hyp['opt']['bias_decay']}
+    params_non_bias = {'params': [], 'lr': config['opt']['non_bias_lr'], 'momentum': .85, 'nesterov': True, 'weight_decay': config['opt']['non_bias_decay']}
+    params_bias     = {'params': [], 'lr': config['opt']['bias_lr'],     'momentum': .85, 'nesterov': True, 'weight_decay': config['opt']['bias_decay']}
 
     for name, p in network.named_parameters():
         if p.requires_grad:
@@ -21,7 +21,7 @@ def init_split_parameter_dictionaries(network):
 class OptSched:
     def __init__(self, batchsize, net, total_train_steps, num_low_lr_steps_for_ema) -> None:
 
-        hyp['opt'] = {
+        config['opt'] = {
             'bias_lr':        1.15 * 1.35 * 1. * bias_scaler/batchsize, # TODO: How we're expressing this information feels somewhat clunky, is there maybe a better way to do this? :'))))
             'non_bias_lr':    1.15 * 1.35 * 1. / batchsize,
             'bias_decay':     .85 * 4.8e-4 * batchsize/bias_scaler,
@@ -41,7 +41,7 @@ class OptSched:
         #opt_bias = torch.optim.SGD(**bias_params)
 
         # Adjust pct_start based upon how many epochs we need to finetune the ema at a low lr for
-        pct_start = hyp['opt']['percent_start'] * (total_train_steps/(total_train_steps - num_low_lr_steps_for_ema))
+        pct_start = config['opt']['percent_start'] * (total_train_steps/(total_train_steps - num_low_lr_steps_for_ema))
 
         ## Not the most intuitive, but this basically takes us from ~0 to max_lr at the point pct_start, then down to .1 * max_lr at the end (since 1e16 * 1e-15 = .1 --
         ##   This quirk is because the final lr value is calculated from the starting lr value and not from the maximum lr value set during training)

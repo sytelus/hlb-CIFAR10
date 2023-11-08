@@ -7,7 +7,7 @@ torch.backends.cuda.matmul.allow_tf32 = True
 # set global defaults (in this particular file) for convolutions
 default_conv_kwargs = {'kernel_size': 3, 'padding': 'same', 'bias': False}
 
-hyp ={
+config ={
     'net': {
         'whitening': {
             'kernel_size': 2,
@@ -204,10 +204,10 @@ def set_whitening_conv(conv_layer, eigenvalues, eigenvectors, eps=1e-2, freeze=T
 
 def make_net(data, scaling_factor, device, pad_amount):
     # You can play with this on your own if you want, for the first beta I wanted to keep things simple (for now) and leave it out of the hyperparams dict
-    kernel_size = hyp['net']['whitening']['kernel_size']
-    num_examples = hyp['net']['whitening']['num_examples']
-    base_depth = hyp['net']['base_depth']
-    batch_norm_momentum = hyp['net']['batch_norm_momentum']
+    kernel_size = config['net']['whitening']['kernel_size']
+    num_examples = config['net']['whitening']['num_examples']
+    base_depth = config['net']['base_depth']
+    batch_norm_momentum = config['net']['batch_norm_momentum']
 
     scaler = 2.
     depths = {

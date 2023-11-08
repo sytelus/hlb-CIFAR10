@@ -2,29 +2,41 @@ import os
 import functools
 from functools import partial
 import platform
+import logging
 
 import torch
 import torchvision
 from torchvision import transforms
 import torch.nn.functional as F
 
-hyp = {
+import utils
+
+config = {
     'data': {
         'cutout_size': 0,
+    'cache_filename': 'data_cache.pt',
     }
 }
 
-def get_dataset(data_location, device, dtype, pad_amount):
+def get_dataset(download_path, cache_path, device, dtype, pad_amount):
     data = None
-    if os.path.exists(data_location):
+
+    cache_path = utils.full_path(cache_path, create=True)
+    cache_filepath = os.path.join(cache_path, config['data']['cache_filename'])
+    if os.path.exists(cache_filepath):
+        logging.info("Loading cached dataset from %s", cache_filepath)
         # This is effectively instantaneous, and takes us practically straight to where the dataloader-loaded dataset would be. :)
         # So as long as you run the above loading process once, and keep the file on the disc it's specified by default in the above
-        # hyp dictionary, then we should be good. :)
-        data = torch.load(data_location)
+        # config dictionary, then we should be good. :)
+        data = torch.load(cache_filepath)
         if data['train']['images'].dtype != dtype:
+            logging.info(f"Cached dataset is different dtype {data['train']['images'].dtype} than requested {dtype}, so regenerating cache")
             data = None
+    else:
+        logging.info("No cached dataset found at %s", cache_filepath)
 
     if data is None:
+        logging.info("Generating dataset cache...")
         cifar10_mean, cifar10_std = [
             torch.tensor([0.4913997551666284, 0.48215855929893703,
                         0.4465309133731618], device=device),
@@ -35,10 +47,11 @@ def get_dataset(data_location, device, dtype, pad_amount):
         transform = transforms.Compose([
             transforms.ToTensor()])
 
+        download_path = utils.full_path(download_path, create=True)
         cifar10 = torchvision.datasets.CIFAR10(
-            '~/dataroot/', download=True,  train=True,  transform=transform)
+            download_path, download=True,  train=True,  transform=transform)
         cifar10_eval = torchvision.datasets.CIFAR10(
-            '~/dataroot/', download=False, train=False, transform=transform)
+            download_path, download=False, train=False, transform=transform)
 
         # use the dataloader to get a single batch of all of the dataset items at once.
         train_dataset_gpu_loader = torch.utils.data.DataLoader(cifar10, batch_size=len(cifar10), drop_last=True,
@@ -76,7 +89,7 @@ def get_dataset(data_location, device, dtype, pad_amount):
         data['train']['images'] = data['train']['images'].to(dtype=dtype)
         data['eval']['images'] = data['eval']['images'].to(dtype=dtype)
 
-        torch.save(data, data_location)
+        torch.save(data, cache_filepath)
 
 
     # As you'll note above and below, one difference is that we don't count loading the raw data to GPU since it's such a variable operation, and can sort of get in the way
@@ -139,7 +152,7 @@ def batch_flip_lr(batch_images, flip_chance=.5):
 
 # TODO: Could we jit this in the (more distant) future? :)
 @torch.no_grad()
-def get_batches(data_dict, key, batchsize, memory_format, device, cutout_size=hyp['data']['cutout_size']):
+def get_batches(data_dict, key, batchsize, memory_format, device, cutout_size=config['data']['cutout_size']):
     num_epoch_examples = len(data_dict[key]['images'])
     shuffled = torch.randperm(num_epoch_examples, device=device)
     crop_size = 32
